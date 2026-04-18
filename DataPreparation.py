@@ -73,23 +73,51 @@ class DataPreparation:
 
 
     def load_data(self):
-        self.data = pd.read_json(self.file_path, lines=True)
         self.texts = []
-        for _,conversation in self.data.iterrows():
-            text = []
-            for msg in conversation['messages']:
-                text.extend(self.process_text(msg['text']))
 
-            messages = {
-                "manipulation_type": conversation['manipulation_type'],
-                "is_manipulation": conversation['is_manipulation'],
-                "text": text
-            }
+        if self.file_path.lower().endswith('.jsonl'):
+            self.data = pd.read_json(self.file_path, lines=True)
+            for _, conversation in self.data.iterrows():
+                text = []
+                for msg in conversation['messages']:
+                    text.extend(self.process_text(msg['text']))
 
-            self.texts.append(messages)
+                messages = {
+                    "manipulation_type": conversation['manipulation_type'],
+                    "is_manipulation": conversation['is_manipulation'],
+                    "text": text
+                }
+                self.texts.append(messages)
+
+        elif self.file_path.lower().endswith('.csv'):
+            self.data = pd.read_csv(self.file_path)
+            for _, row in self.data.iterrows():
+                text = self.process_text(str(row.get('dialogue', '')))
+                is_manipulation = self._csv_is_manipulation(row)
+                manipulation_type = 'manipulation' if is_manipulation else 'neutral'
+
+                messages = {
+                    "manipulation_type": manipulation_type,
+                    "is_manipulation": is_manipulation,
+                    "text": text
+                }
+                self.texts.append(messages)
+
+        else:
+            raise ValueError(f'Unsupported file type: {self.file_path}')
 
         self.texts = self.deduplicate(self.texts)
         return self.texts
+
+    def _csv_is_manipulation(self, row):
+        for column in ['manipulative_1', 'manipulative_2', 'manipulative_3']:
+            value = row.get(column)
+            if pd.notna(value):
+                try:
+                    return int(value) == 1
+                except (TypeError, ValueError):
+                    return str(value).strip() == '1'
+        return False
 
     def deduplicate(self, texts):
 

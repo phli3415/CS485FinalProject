@@ -23,6 +23,6 @@ class LogisticRegressionModel:
         X_test = [' '.join(conversation['text']) for conversation in test_set]
         Y_test = [conversation['manipulation_type'] for conversation in test_set]
         Y_pred = self.model.predict(X_test)
-        return classification_report(Y_test, Y_pred)
+        return classification_report(Y_test, Y_pred, zero_division=0)
 
 

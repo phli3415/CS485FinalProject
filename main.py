@@ -9,7 +9,7 @@ from LogisticRegression import LogisticRegressionModel
 if __name__ == "__main__":
     # print(stopwords.words('english'))
 
-    data_prep = DataPreparation("data/manipulational_conversation.jsonl")
+    data_prep = DataPreparation("data/mentalmanip_detailed.csv")
     texts = data_prep.load_data()
 
     dataset = data_prep.cross_validation_split(k=5)
