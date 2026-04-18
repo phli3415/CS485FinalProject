@@ -80,11 +80,32 @@ class DataPreparation:
             for msg in conversation['messages']:
                 text.extend(self.process_text(msg['text']))
 
-            messages = {"manipulation_type": conversation['manipulation_type'], "is_manipulation": conversation['is_manipulation'], "text": text}
+            messages = {
+                "manipulation_type": conversation['manipulation_type'],
+                "is_manipulation": conversation['is_manipulation'],
+                "text": text
+            }
 
             self.texts.append(messages)
-        
+
+        self.texts = self.deduplicate(self.texts)
         return self.texts
+
+    def deduplicate(self, texts):
+
+        seen = set()
+        unique_texts = []
+        for record in texts:
+            record_key = (
+                record['manipulation_type'],
+                record['is_manipulation'],
+                ' '.join(record['text'])
+            )
+            if record_key in seen:
+                continue
+            seen.add(record_key)
+            unique_texts.append(record)
+        return unique_texts
     
         
     def cross_validation_split(self, k = 5, shuffle = True, random_state = 67):
@@ -102,10 +123,10 @@ class DataPreparation:
 
     def shuffle_split(self, k = 5, random_state = 67):
         dataset = {}
-        all_indices = np.arange(10000)
+        all_indices = np.arange(len(self.texts))
 
         for i in range (k):
-            train_indices = resample(all_indices, replace=True, n_samples=10000, random_state=i)
+            train_indices = resample(all_indices, replace=True, n_samples=10000, random_state=i+random_state)
             test_indices = list(set(all_indices) - set(train_indices))
             fold = {}
             fold['train'] = [self.texts[idx] for idx in train_indices]
