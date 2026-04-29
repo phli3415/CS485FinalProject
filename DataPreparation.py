@@ -3,6 +3,8 @@ import numpy as np
 import nltk
 import re
 from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk import pos_tag
 from sklearn.model_selection import KFold
 from sklearn.utils import resample
 
@@ -200,6 +202,7 @@ class DataPreparation:
     self.texts = []
     self.lemmatizer = nltk.stem.WordNetLemmatizer()
     self.stop_words = set(stopwords.words("english")) - self.keep_words
+    self._pos_resources_ready = False
 
   def process_text(self, text):
 
@@ -212,28 +215,91 @@ class DataPreparation:
     words = [self.lemmatizer.lemmatize(w, pos="v") for w in words]
 
     return words
+  
 
-  def load_data(self):
+  def _ensure_pos_resources(self):
+    if self._pos_resources_ready:
+        return
+    nltk.download('punkt', quiet=True)
+    nltk.download('punkt_tab', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    nltk.download('averaged_perceptron_tagger_eng', quiet=True)
+    self._pos_resources_ready = True
+
+
+  def extract_word_pos_pairs(self, raw_text):
+    self._ensure_pos_resources()
+
+    if not raw_text or not isinstance(raw_text, str):
+        return []
+
+    tokens = nltk.word_tokenize(raw_text)
+    return nltk.pos_tag(tokens)
+
+
+  def extract_pos_tags(self, raw_text):
+    return [tag for _, tag in self.extract_word_pos_pairs(raw_text)]
+  
+
+  def strip_speaker_labels(self, text):
+    if not isinstance(text, str):
+        return text
+    return re.sub(r'\bPERSON\d+\s*:\s*', ' ', text, flags=re.IGNORECASE)
+ 
+
+
+  def load_data(self, include_pos = False, strip_speakers=False, include_word_pos=False):
     self.texts = []
 
     if self.file_path.lower().endswith(".jsonl"):
       self.data = pd.read_json(self.file_path, lines=True)
       for _, conversation in self.data.iterrows():
         text = []
+
+        pos_tags = []
+        word_pos_pairs = []
+
         for msg in conversation["messages"]:
-          text.extend(self.process_text(msg["text"]))
+          raw = msg['text']
+          if strip_speakers:
+            raw = self.strip_speaker_labels(raw)
+          text.extend(self.process_text(raw))
+          if include_pos or include_word_pos:
+            pairs = self.extract_word_pos_pairs(raw)
+            if include_pos:
+              pos_tags.extend(tag for _, tag in pairs)
+            if include_word_pos:
+              word_pos_pairs.extend(pairs)
 
         messages = {
             "manipulation_type": conversation["manipulation_type"],
             "is_manipulation": conversation["is_manipulation"],
             "text": text,
         }
+        if include_pos:
+          messages["pos_tags"] = pos_tags
+        if include_word_pos:
+          messages["word_pos_pairs"] = word_pos_pairs
         self.texts.append(messages)
 
     elif self.file_path.lower().endswith(".csv"):
       self.data = pd.read_csv(self.file_path)
       for _, row in self.data.iterrows():
-        text = self.process_text(str(row.get("dialogue", "")))
+        raw = str(row.get('dialogue', ''))
+        if strip_speakers:
+          raw = self.strip_speaker_labels(raw)
+
+        text = self.process_text(raw)
+
+        pos_tags = None
+        word_pos_pairs = None
+        if include_pos or include_word_pos:
+          pairs = self.extract_word_pos_pairs(raw)
+          if include_pos:
+            pos_tags = [tag for _, tag in pairs]
+          if include_word_pos:
+            word_pos_pairs = pairs
+
         is_manipulation = self._csv_is_manipulation(row)
         manipulation_type = "manipulation" if is_manipulation else "neutral"
 
@@ -242,6 +308,10 @@ class DataPreparation:
             "is_manipulation": is_manipulation,
             "text": text,
         }
+        if include_pos:
+          messages["pos_tags"] = pos_tags
+        if include_word_pos:
+          messages["word_pos_pairs"] = word_pos_pairs
         self.texts.append(messages)
 
     else:
