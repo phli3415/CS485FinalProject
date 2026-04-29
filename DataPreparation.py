@@ -6,159 +6,303 @@ from nltk.corpus import stopwords
 from sklearn.model_selection import KFold
 from sklearn.utils import resample
 
+
 class DataPreparation:
 
-    # This set of stop words can be remained to preserve important linguistic features that might be crucial for manipulation detection.
-    # Please feel free to modify this list based on the specific requirements of your task.
-    
-    
-    keep_words = {
-        # Pronounce
-        'i', 'i\'d', 'i\'ll', 'i\'m', 'i\'ve', 'me', 'my', 'mine', 'myself',
-        'you', 'you\'d', 'you\'ll', 'you\'re', 'you\'ve', 'your', 'yours', 'yourself', 'yourselves',
-        'we', 'we\'d', 'we\'ll', 'we\'re', 'we\'ve', 'our', 'ours', 'ourselves',
-        'he', 'he\'d', 'he\'ll', 'he\'s', 'him', 'himself', 'his',
-        'she', 'she\'d', 'she\'ll', 'she\'s', 'her', 'hers', 'herself',
-        'it', 'it\'d', 'it\'ll', 'it\'s', 'its', 'itself',
-        'they', 'they\'d', 'they\'ll', 'they\'re', 'they\'ve', 'them', 'themselves', 'their', 'theirs',
-   
-        # Negation
-        'no', 'nor', 'not', 'never', 'none', 'nothing', 'nobody', 'without', 'ain', 'ain\'t',
-        'didn', 'didn\'t', 'doesn', 'doesn\'t', 'don', 'don\'t', 'hadn', 'hadn\'t', 'hasn', 'hasn\'t',
-        'haven', 'haven\'t', 'isn', 'isn\'t', 'wasn', 'wasn\'t', 'weren', 'weren\'t', 'won', 'won\'t',
-        'wouldn', 'wouldn\'t', 'couldn', 'couldn\'t', 'mightn', 'mightn\'t', 'mustn', 'mustn\'t',
-        'needn', 'needn\'t', 'shan', 'shan\'t',
+  # This set of stop words can be remained to preserve important linguistic features that might be crucial for manipulation detection.
+  # Please feel free to modify this list based on the specific requirements of your task.
 
-        # Modality / Emphasis
-        'must', 'should', 'shouldn', 'shouldn\'t', 'should\'ve', 'would', 'could', 'might', 'need', 'can', 'will',
-        'very', 'so', 'too', 'really', 'just', 'only', 'simply', 'more', 'most', 'all', 'both', 'even', 'still', 'already',
+  keep_words = {
+      # Pronounce
+      "i",
+      "i'd",
+      "i'll",
+      "i'm",
+      "i've",
+      "me",
+      "my",
+      "mine",
+      "myself",
+      "you",
+      "you'd",
+      "you'll",
+      "you're",
+      "you've",
+      "your",
+      "yours",
+      "yourself",
+      "yourselves",
+      "we",
+      "we'd",
+      "we'll",
+      "we're",
+      "we've",
+      "our",
+      "ours",
+      "ourselves",
+      "he",
+      "he'd",
+      "he'll",
+      "he's",
+      "him",
+      "himself",
+      "his",
+      "she",
+      "she'd",
+      "she'll",
+      "she's",
+      "her",
+      "hers",
+      "herself",
+      "it",
+      "it'd",
+      "it'll",
+      "it's",
+      "its",
+      "itself",
+      "they",
+      "they'd",
+      "they'll",
+      "they're",
+      "they've",
+      "them",
+      "themselves",
+      "their",
+      "theirs",
+      # Negation
+      "no",
+      "nor",
+      "not",
+      "never",
+      "none",
+      "nothing",
+      "nobody",
+      "without",
+      "ain",
+      "ain't",
+      "didn",
+      "didn't",
+      "doesn",
+      "doesn't",
+      "don",
+      "don't",
+      "hadn",
+      "hadn't",
+      "hasn",
+      "hasn't",
+      "haven",
+      "haven't",
+      "isn",
+      "isn't",
+      "wasn",
+      "wasn't",
+      "weren",
+      "weren't",
+      "won",
+      "won't",
+      "wouldn",
+      "wouldn't",
+      "couldn",
+      "couldn't",
+      "mightn",
+      "mightn't",
+      "mustn",
+      "mustn't",
+      "needn",
+      "needn't",
+      "shan",
+      "shan't",
+      # Modality / Emphasis
+      "must",
+      "should",
+      "shouldn",
+      "shouldn't",
+      "should've",
+      "would",
+      "could",
+      "might",
+      "need",
+      "can",
+      "will",
+      "very",
+      "so",
+      "too",
+      "really",
+      "just",
+      "only",
+      "simply",
+      "more",
+      "most",
+      "all",
+      "both",
+      "even",
+      "still",
+      "already",
+      # Contrast / Concession
+      "but",
+      "however",
+      "although",
+      "though",
+      "yet",
+      # Interrogatives
+      "how",
+      "what",
+      "when",
+      "where",
+      "which",
+      "who",
+      "whom",
+      "why",
+      # Degree / Focus Particles
+      "just",
+      "only",
+      "simply",
+      "even",
+      "still",
+      "already",
+      "so",
+      "such",
+      "too",
+      # Demonstratives
+      "this",
+      "that",
+      "these",
+      "those",
+      "it",
+      "they",
+      "them",
+      "their",
+      "theirs",
+      # Specific Prepositions
+      "for",
+      "with",
+      "without",
+      "against",
+      "like",
+      "as",
+      "than",
+      "if",
+      "then",
+      "now",
+      "own",
+      "same",
+      "such",
+      "about",
+      "because",
+  }
 
-        # Contrast / Concession
-        'but', 'however', 'although', 'though', 'yet',
+  def __init__(self, file_path):
+    # nltk.download('wordnet')
+    # nltk.download('omw-1.4')
+    self.file_path = file_path
+    self.data = []
+    self.labels = []
+    self.texts = []
+    self.lemmatizer = nltk.stem.WordNetLemmatizer()
+    self.stop_words = set(stopwords.words("english")) - self.keep_words
 
-        # Interrogatives
-        'how', 'what', 'when', 'where', 'which', 'who', 'whom', 'why',
+  def process_text(self, text):
 
-        # Degree / Focus Particles
-        'just', 'only', 'simply', 'even', 'still', 'already', 'so', 'such', 'too',
+    text = text.lower()
+    tokens = text.split()
 
-        # Demonstratives
-        'this', 'that', 'these', 'those', 'it', 'they', 'them', 'their', 'theirs',
-        
-        # Specific Prepositions
-        'for', 'with', 'without', 'against', 'like', 'as', 'than', 'if', 'then', 'now', 'own', 'same', 'such', 'about', 'because'
-    }
+    words = [w for w in tokens if w not in self.stop_words]
+    words = [re.sub(r"[^a-zA-Z\s]", "", w) for w in words]
+    words = [self.lemmatizer.lemmatize(w) for w in words]
+    words = [self.lemmatizer.lemmatize(w, pos="v") for w in words]
 
-    def __init__(self, file_path):
-        # nltk.download('wordnet')
-        # nltk.download('omw-1.4')
-        self.file_path = file_path
-        self.data = None
-        self.labels = None
-        self.texts = None
-        self.lemmatizer = nltk.stem.WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))-self.keep_words
+    return words
 
-    def process_text (self,text):
+  def load_data(self):
+    self.texts = []
 
-        text = text.lower()
-        tokens = text.split()
+    if self.file_path.lower().endswith(".jsonl"):
+      self.data = pd.read_json(self.file_path, lines=True)
+      for _, conversation in self.data.iterrows():
+        text = []
+        for msg in conversation["messages"]:
+          text.extend(self.process_text(msg["text"]))
 
-        words = [w for w in tokens if w not in self.stop_words]
-        words = [re.sub(r'[^a-zA-Z\s]', '', w) for w in words]
-        words = [self.lemmatizer.lemmatize(w) for w in words]
-        words = [self.lemmatizer.lemmatize(w, pos='v') for w in words]
+        messages = {
+            "manipulation_type": conversation["manipulation_type"],
+            "is_manipulation": conversation["is_manipulation"],
+            "text": text,
+        }
+        self.texts.append(messages)
 
-        return words
+    elif self.file_path.lower().endswith(".csv"):
+      self.data = pd.read_csv(self.file_path)
+      for _, row in self.data.iterrows():
+        text = self.process_text(str(row.get("dialogue", "")))
+        is_manipulation = self._csv_is_manipulation(row)
+        manipulation_type = "manipulation" if is_manipulation else "neutral"
 
+        messages = {
+            "manipulation_type": manipulation_type,
+            "is_manipulation": is_manipulation,
+            "text": text,
+        }
+        self.texts.append(messages)
 
-    def load_data(self):
-        self.texts = []
+    else:
+      raise ValueError(f"Unsupported file type: {self.file_path}")
 
-        if self.file_path.lower().endswith('.jsonl'):
-            self.data = pd.read_json(self.file_path, lines=True)
-            for _, conversation in self.data.iterrows():
-                text = []
-                for msg in conversation['messages']:
-                    text.extend(self.process_text(msg['text']))
+    self.texts = self.deduplicate(self.texts)
+    return self.texts
 
-                messages = {
-                    "manipulation_type": conversation['manipulation_type'],
-                    "is_manipulation": conversation['is_manipulation'],
-                    "text": text
-                }
-                self.texts.append(messages)
+  def _csv_is_manipulation(self, row):
+    for column in ["manipulative_1", "manipulative_2", "manipulative_3"]:
+      value = row.get(column)
+      if pd.notna(value):
+        try:
+          return int(value) == 1
+        except (TypeError, ValueError):
+          return str(value).strip() == "1"
+    return False
 
-        elif self.file_path.lower().endswith('.csv'):
-            self.data = pd.read_csv(self.file_path)
-            for _, row in self.data.iterrows():
-                text = self.process_text(str(row.get('dialogue', '')))
-                is_manipulation = self._csv_is_manipulation(row)
-                manipulation_type = 'manipulation' if is_manipulation else 'neutral'
+  def deduplicate(self, texts):
 
-                messages = {
-                    "manipulation_type": manipulation_type,
-                    "is_manipulation": is_manipulation,
-                    "text": text
-                }
-                self.texts.append(messages)
+    seen = set()
+    unique_texts = []
+    for record in texts:
+      record_key = (
+          record["manipulation_type"],
+          record["is_manipulation"],
+          " ".join(record["text"]),
+      )
+      if record_key in seen:
+        continue
+      seen.add(record_key)
+      unique_texts.append(record)
+    return unique_texts
 
-        else:
-            raise ValueError(f'Unsupported file type: {self.file_path}')
+  def cross_validation_split(self, k=5, shuffle=True, random_state=67):
+    kf = KFold(n_splits=k, shuffle=shuffle, random_state=random_state)
+    dataset = {}
 
-        self.texts = self.deduplicate(self.texts)
-        return self.texts
+    for i, (train_index, test_index) in enumerate(kf.split(self.texts)):
+      fold = {}
+      fold["train"] = [self.texts[idx] for idx in train_index]
+      fold["test"] = [self.texts[idx] for idx in test_index]
+      dataset[f"fold_{i}"] = fold
 
-    def _csv_is_manipulation(self, row):
-        for column in ['manipulative_1', 'manipulative_2', 'manipulative_3']:
-            value = row.get(column)
-            if pd.notna(value):
-                try:
-                    return int(value) == 1
-                except (TypeError, ValueError):
-                    return str(value).strip() == '1'
-        return False
+    return dataset
 
-    def deduplicate(self, texts):
+  def shuffle_split(self, k=5, random_state=67):
+    dataset = {}
+    all_indices = np.arange(len(self.texts))
 
-        seen = set()
-        unique_texts = []
-        for record in texts:
-            record_key = (
-                record['manipulation_type'],
-                record['is_manipulation'],
-                ' '.join(record['text'])
-            )
-            if record_key in seen:
-                continue
-            seen.add(record_key)
-            unique_texts.append(record)
-        return unique_texts
-    
-        
-    def cross_validation_split(self, k = 5, shuffle = True, random_state = 67):
-        kf = KFold(n_splits=k, shuffle=shuffle, random_state=random_state)
-        dataset = {}
+    for i in range(k):
+      train_indices = resample(
+          all_indices,
+          replace=True,
+          n_samples=10000,
+          random_state=i + random_state,
+      )
+      test_indices = list(set(all_indices) - set(train_indices))
+      fold = {}
+      fold["train"] = [self.texts[idx] for idx in train_indices]
+      fold["test"] = [self.texts[idx] for idx in test_indices]
+      dataset[f"fold_{i}"] = fold
 
-        for i, (train_index, test_index) in enumerate(kf.split(self.texts)):
-            fold = {}
-            fold['train'] = [self.texts[idx] for idx in train_index]
-            fold['test'] = [self.texts[idx] for idx in test_index]
-            dataset[f'fold_{i}'] = fold
-        
-        return dataset
-        
-
-    def shuffle_split(self, k = 5, random_state = 67):
-        dataset = {}
-        all_indices = np.arange(len(self.texts))
-
-        for i in range (k):
-            train_indices = resample(all_indices, replace=True, n_samples=10000, random_state=i+random_state)
-            test_indices = list(set(all_indices) - set(train_indices))
-            fold = {}
-            fold['train'] = [self.texts[idx] for idx in train_indices]
-            fold['test'] = [self.texts[idx] for idx in test_indices]
-            dataset[f'fold_{i}'] = fold
-
-        return dataset
+    return dataset
