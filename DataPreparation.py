@@ -3,8 +3,6 @@ import numpy as np
 import nltk
 import re
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk import pos_tag
 from sklearn.model_selection import KFold
 from sklearn.utils import resample
 
@@ -196,6 +194,8 @@ class DataPreparation:
   def __init__(self, file_path):
     # nltk.download('wordnet')
     # nltk.download('omw-1.4')
+    # nltk.download('stopwords')
+
     self.file_path = file_path
     self.data = []
     self.labels = []

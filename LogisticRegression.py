@@ -2,16 +2,13 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report
 from scipy.sparse import issparse, lil_matrix, diags
-
 from collections import Counter
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
-
-
 
 
 
@@ -54,12 +51,6 @@ DENSE_FEATURE_NAMES = [
     'jj_rate',
     'passive_rate',
 ]
-
-
-
-
-
-
 
 
 def _count_passive(word_pos_pairs, window=3):
@@ -137,11 +128,6 @@ def _compute_dense_features(text_tokens, pos_tags, word_pos_pairs=None):
     jj       / pos_denom,
     passive  / passive_denom,
   ], dtype=np.float64)
-
-
-
-
-
 
 
 
@@ -232,183 +218,137 @@ class PositionalDistributionTransformer(BaseEstimator, TransformerMixin):
 
 
 class LogisticRegressionModel:
+  """Logistic regression with three optional feature blocks:
+  word ngrams (always on), positional distribution, dense POS.
+  Use class_weight='balanced' for class imbalance handling."""
   def __init__(
-      self, random_state=67, ngram_range=(1, 1), use_positional_features=False
+      self, 
+      random_state=67, 
+      ngram_range=(1, 1), 
+      use_positional_features=False,
+      use_pos_features=False,
   ):
     self.random_state = random_state
     self.ngram_range = ngram_range
     self.use_positional_features = use_positional_features
-
-    if self.use_positional_features:
-      self.model = Pipeline(
-          [
-              (
-                  "features",
-                  FeatureUnion(
-                      [
-                          (
-                              "counts",
-                              Pipeline(
-                                  [
-                                      (
-                                          "vectorizer",
-                                          CountVectorizer(
-                                              ngram_range=self.ngram_range
-                                          ),
-                                      ),
-                                      ("normalizer", PerDocumentMaxNormalizer()),
-                                  ]
-                              ),
-                          ),
-                          (
-                              "positional",
-                              PositionalDistributionTransformer(
-                                  ngram_range=self.ngram_range
-                              ),
-                          ),
-                      ]
-                  ),
-              ),
-              (
-                  "clf",
-                  LogisticRegression(
-                      solver="lbfgs",
-                      max_iter=1000,
-                      random_state=self.random_state,
-                      class_weight="balanced",
-                  ),
-              ),
-          ]
-      )
-    else:
-      self.model = Pipeline(
-          [
-              ("vectorizer", CountVectorizer(ngram_range=self.ngram_range)),
-              (
-                  "clf",
-                  LogisticRegression(
-                      solver="lbfgs",
-                      max_iter=1000,
-                      random_state=self.random_state,
-                      class_weight="balanced",
-                  ),
-              ),
-          ]
-      )
-
-  def fit(self, training_set):
-    X_train = [" ".join(conversation["text"]) for conversation in training_set]
-    Y_train = [conversation["manipulation_type"]
-               for conversation in training_set]
-    self.model.fit(X_train, Y_train)
-
-  def predict(self, test_set, output_as_dict=False):
-    X_test = [" ".join(conversation["text"]) for conversation in test_set]
-    Y_test = [conversation["manipulation_type"] for conversation in test_set]
-    Y_pred = self.model.predict(X_test)
-    return classification_report(Y_test, Y_pred, zero_division=0, output_dict=output_as_dict)
-
-
-
-
-
-
-
-
-class LogisticRegressionPOSModel:
-  def __init__(
-    self,
-    random_state=67,
-    word_ngram_range=(1, 2),
-    pos_ngram_range=None,
-    use_dense_pos=True,
-    class_weight='balanced',
-  ):
-    self.random_state = random_state
-    self.word_ngram_range = word_ngram_range
-    self.pos_ngram_range = pos_ngram_range
-    self.use_dense_pos = use_dense_pos
-    self.class_weight = class_weight
+    self.use_pos_features = use_pos_features
 
     transformers = [
-      ('words',
-        CountVectorizer(ngram_range=self.word_ngram_range),
-        'text'),
+      (
+        "counts",
+        Pipeline([
+          ("vectorizer", CountVectorizer(ngram_range=self.ngram_range)),
+          ("normalizer", PerDocumentMaxNormalizer()),
+        ]),
+        "text",
+      ),
     ]
-    if self.use_dense_pos:
+
+    if self.use_positional_features:
       transformers.append((
-        'pos_dense',
+          "positional",
+          PositionalDistributionTransformer(ngram_range=self.ngram_range),
+          "text",
+      ))
+
+    if self.use_pos_features:
+      transformers.append((
+        "pos_dense",
         StandardScaler(with_mean=False),
         DENSE_FEATURE_NAMES,
       ))
 
     self.model = Pipeline([
-      ('features', ColumnTransformer(transformers)),
-      ('clf', LogisticRegression(
-        solver='lbfgs',
-        max_iter=1000,
-        random_state=self.random_state,
-        class_weight=self.class_weight,
-      )),
+        ("features", ColumnTransformer(transformers)),
+        ("clf", LogisticRegression(
+            solver="lbfgs",
+            max_iter=1000,
+            random_state=self.random_state,
+            class_weight="balanced",
+        )),
     ])
 
+    
   def _to_dataframe(self, dataset):
-    rows = {'text': [' '.join(c['text']) for c in dataset]}
-    if self.use_dense_pos:
+    """Convert a list-of-dicts dataset into a DataFrame the
+    ColumnTransformer can index by column name. Always provides 'text';
+    conditionally adds the 17 dense feature columns when POS features are on."""
+    rows = {"text": [" ".join(c["text"]) for c in dataset]}
+    if self.use_pos_features:
       feats = np.vstack([
-        _compute_dense_features(
-          c.get('text', []),
-          c.get('pos_tags', []),
-          c.get('word_pos_pairs', []),
-        )
-        for c in dataset
+          _compute_dense_features(
+              c.get("text", []),
+              c.get("pos_tags", []),
+              c.get("word_pos_pairs", []),
+          )
+          for c in dataset
       ])
       for i, name in enumerate(DENSE_FEATURE_NAMES):
         rows[name] = feats[:, i]
     return pd.DataFrame(rows)
+  
 
   def fit(self, training_set):
-    X = self._to_dataframe(training_set)
-    y = [c['manipulation_type'] for c in training_set]
-    self.model.fit(X, y)
+    X_train = self._to_dataframe(training_set)
+    Y_train = [conversation["manipulation_type"] for conversation in training_set]
+    self.model.fit(X_train, Y_train)
 
   def predict(self, test_set, output_as_dict=False):
-    X = self._to_dataframe(test_set)
-    y = [c['manipulation_type'] for c in test_set]
-    return classification_report(
-      y, self.model.predict(X),
-      zero_division=0,
-      output_dict=output_as_dict,
-    )
+    X_test = self._to_dataframe(test_set)
+    Y_test = [conversation["manipulation_type"] for conversation in test_set]
+    Y_pred = self.model.predict(X_test)
+    return classification_report(Y_test, Y_pred, zero_division=0, output_dict=output_as_dict)
+
 
   def feature_summary(self):
-    feats = self.model.named_steps['features']
-    clf = self.model.named_steps['clf']
-
-    n_word = len(feats.named_transformers_['words'].vocabulary_)
-
-    summary = {
-      'n_word_features':     n_word,
-      'n_pos_features':      0,
-      'sample_pos_features': [],
-      'dense_pos_coefs':     {},
-      'positive_class':      None,
-    }
-
-    if self.use_dense_pos:
-      n_dense = len(DENSE_FEATURE_NAMES)
-      summary['n_pos_features'] = n_dense
-      summary['sample_pos_features'] = DENSE_FEATURE_NAMES[:10]
-
-      coefs = clf.coef_.ravel()
-      dense_coefs = coefs[n_word:n_word + n_dense]
-
-      classes = list(clf.classes_)
-      if len(classes) == 2:
-        summary['positive_class'] = classes[1]
-
-      summary['dense_pos_coefs'] = {
-        name: float(c) for name, c in zip(DENSE_FEATURE_NAMES, dense_coefs)
+    """Returns dense POS coefficients when POS features are enabled.
+    Walks the fitted ColumnTransformer to find where the dense block lives
+    in the flat coefficient array, since other blocks may come before it."""
+    if not self.use_pos_features:
+      return {
+          "n_word_features": 0,
+          "n_pos_features": 0,
+          "positive_class": None,
+          "dense_pos_coefs": {},
       }
 
-    return summary
+    feats = self.model.named_steps["features"]
+    clf = self.model.named_steps["clf"]
+    coefs = clf.coef_.ravel()
+
+    offset = 0
+    dense_coefs = None
+    n_word = 0
+    for name, transformer, _columns in feats.transformers_:
+      if name == "remainder":
+        continue
+      block_width = self._block_width(name, transformer)
+      if name == "counts":
+        n_word = block_width
+      if name == "pos_dense":
+        dense_coefs = coefs[offset:offset + block_width]
+        break
+      offset += block_width
+
+    classes = list(clf.classes_)
+    return {
+        "n_word_features": n_word,
+        "n_pos_features": len(DENSE_FEATURE_NAMES),
+        "positive_class": classes[1] if len(classes) == 2 else None,
+        "dense_pos_coefs": (
+            {name: float(c) for name, c in zip(DENSE_FEATURE_NAMES, dense_coefs)}
+            if dense_coefs is not None else {}
+        ),
+    }
+
+  @staticmethod
+  def _block_width(name, transformer):
+    """Width of a fitted transformer's output, used to find the dense
+    block's offset in the flat coefficient vector."""
+    if name == "counts":
+      return len(transformer.named_steps["vectorizer"].vocabulary_)
+    if name == "positional":
+      return len(transformer.vocabulary_) * 3
+    if name == "pos_dense":
+      return len(DENSE_FEATURE_NAMES)
+    return 0

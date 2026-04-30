@@ -5,7 +5,6 @@ from DataPreparation import DataPreparation
 from LogisticRegression import LogisticRegressionModel
 
 import pandas as pd
-from LogisticRegression import LogisticRegressionPOSModel
 
 RESULTS_DIR = "./results"
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -23,9 +22,15 @@ POSITIONAL_FAMILY = {
 }
 
 POS_FAMILY = {
-    "Unigram + POS": {"word_ngram_range": (1, 1), "use_dense_pos": True, "class_weight": "balanced"},
-    "Bigram + POS":  {"word_ngram_range": (1, 2), "use_dense_pos": True, "class_weight": "balanced"},
-    "Trigram + POS": {"word_ngram_range": (1, 3), "use_dense_pos": True, "class_weight": "balanced"},
+    "Unigram + POS": {"ngram_range": (1, 1), "use_pos_features": True},
+    "Bigram + POS":  {"ngram_range": (1, 2), "use_pos_features": True},
+    "Trigram + POS": {"ngram_range": (1, 3), "use_pos_features": True},
+}
+
+COMBINED_FAMILY = {
+    "Unigram + Positional + POS": {"ngram_range": (1, 1), "use_positional_features": True, "use_pos_features": True},
+    "Bigram + Positional + POS":  {"ngram_range": (1, 2), "use_positional_features": True, "use_pos_features": True},
+    "Trigram + Positional + POS": {"ngram_range": (1, 3), "use_positional_features": True, "use_pos_features": True},
 }
 
 METRICS = ["precision", "recall", "f1-score"]
@@ -50,8 +55,8 @@ def collect_results(dataset, model_configs, model_class=LogisticRegressionModel,
         summary = model.feature_summary()
         for feat, coef in summary["dense_pos_coefs"].items():
           coef_records.append({
-              "model": name, "fold": fold, "feature": feat,
-              "coef": coef, "positive_class": summary["positive_class"],
+            "model": name, "fold": fold, "feature": feat,
+            "coef": coef, "positive_class": summary["positive_class"],
           })
   return results, coef_records
 
@@ -185,54 +190,50 @@ if __name__ == "__main__":
 
   ngram_results, _ = collect_results(dataset, NGRAM_FAMILY)
   positional_results, _ = collect_results(dataset, POSITIONAL_FAMILY)
-  pos_results, coef_records = collect_results(
-      dataset, POS_FAMILY,
-      model_class=LogisticRegressionPOSModel,
-      coef_capture_names=set(POS_FAMILY.keys()), 
-  )
+  pos_results, pos_coef_records = collect_results(dataset, POS_FAMILY, coef_capture_names=set(POS_FAMILY.keys()), )
+  combined_results, combined_coef_records = collect_results(dataset, COMBINED_FAMILY, coef_capture_names=set(COMBINED_FAMILY.keys()), )
 
   ngram_summary = summarize(ngram_results)
   positional_summary = summarize(positional_results)
   pos_summary = summarize(pos_results)
+  combined_summary = summarize(combined_results)
 
 
 
   ngram_champion = pick_champion(ngram_summary)
   positional_champion = pick_champion(positional_summary)
   pos_champion = pick_champion(pos_summary)
+  combined_champion = pick_champion(combined_summary)
+
   print(f"\nChampions (by manipulation-class F1):")
-  print(f"  N-gram family:     {ngram_champion}")
-  print(f"  Positional family: {positional_champion}")
-  print(f"  POS family:        {pos_champion}")
+  print(f"N-gram family: {ngram_champion}")
+  print(f"Positional family: {positional_champion}")
+  print(f"POS family: {pos_champion}")
+  print(f"Combined family: {combined_champion}")
 
-
-
-  save_summary_table(ngram_summary, filename="family_table_ngram.png",
-                     title="N-gram Family", champion=ngram_champion)
-  save_summary_table(positional_summary, filename="family_table_positional.png",
-                     title="Positional Family", champion=positional_champion)
-  save_summary_table(pos_summary, filename="family_table_pos.png",
-                     title="POS Family", champion=pos_champion)
+  save_summary_table(ngram_summary, filename="family_table_ngram.png", title="N-gram Family", champion=ngram_champion)
+  save_summary_table(positional_summary, filename="family_table_positional.png", title="Positional Family", champion=positional_champion)
+  save_summary_table(pos_summary, filename="family_table_pos.png", title="POS Family", champion=pos_champion)
+  save_summary_table(combined_summary, filename="family_table_combined.png", title="Combined Family", champion=combined_champion)
 
   champion_results = {
-      ngram_champion:      ngram_results[ngram_champion],
-      positional_champion: positional_results[positional_champion],
-      pos_champion:        pos_results[pos_champion],
+    ngram_champion: ngram_results[ngram_champion],
+    positional_champion: positional_results[positional_champion],
+    pos_champion: pos_results[pos_champion],
+    combined_champion: combined_results[combined_champion],
   }
   champion_summary = {
-      ngram_champion:      ngram_summary[ngram_champion],
-      positional_champion: positional_summary[positional_champion],
-      pos_champion:        pos_summary[pos_champion],
+    ngram_champion: ngram_summary[ngram_champion],
+    positional_champion: positional_summary[positional_champion],
+    pos_champion: pos_summary[pos_champion],
+    combined_champion: combined_summary[combined_champion],
   }
 
-  save_summary_table(champion_summary, filename="summary_table.png",
-                     figsize=(10, 2.2),
-                     title="Champion Comparison: Best Model From Each Family")
-  save_macro_avg_chart(champion_summary, filename="macro_avg_bar_chart.png",
-                       title="Champion Comparison: Macro-Avg Metrics (mean \u00b1 std)")
-  save_per_class_f1_chart(champion_results, filename="per_class_f1_bar_chart.png",
-                          title="Champion Comparison: Per-Class F1 (mean \u00b1 std)")
+  save_summary_table(champion_summary, filename="summary_table.png", figsize=(11, 2.6), title="Champion Comparison: Best Model From Each Family")
+  save_macro_avg_chart(champion_summary, filename="macro_avg_bar_chart.png", title="Champion Comparison: Macro-Avg Metrics (mean \u00b1 std)")
+  save_per_class_f1_chart(champion_results, filename="per_class_f1_bar_chart.png", title="Champion Comparison: Per-Class F1 (mean \u00b1 std)")
 
-  save_coef_plot(coef_records, model_name=pos_champion, filename="pos_coef_plot.png")
+  save_coef_plot(combined_coef_records, model_name=combined_champion, filename="combined_coef_plot.png")
+  save_coef_plot(pos_coef_records, model_name=pos_champion, filename="pos_coef_plot.png")
 
   print(f"\nResults saved to {RESULTS_DIR}/")
